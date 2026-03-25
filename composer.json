@@ -1,0 +1,24 @@
+{
+	"name": "drdocks/wp-plugin-kit",
+	"type": "library",
+	"description": "Gedeelde PHP runtime-bibliotheek voor Dr.Docks en Jellit WordPress plugins: updater, settings base, admin menu, helpers.",
+	"license": "GPL-2.0-or-later",
+	"authors": [
+		{
+			"name": "Dr.Docks",
+			"email": "info@drdocks.nl",
+			"homepage": "https://drdocks.nl"
+		}
+	],
+	"require": {
+		"php": ">=8.0"
+	},
+	"autoload": {
+		"classmap": [
+			"src/"
+		]
+	},
+	"config": {
+		"sort-packages": true
+	}
+}
