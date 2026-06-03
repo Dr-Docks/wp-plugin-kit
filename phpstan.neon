@@ -1,9 +1,10 @@
+includes:
+	- vendor/drdocks/wp-coding-standards/phpstan-default.neon
+
 parameters:
-    level: 8
-    tmpDir: .phpstan-cache
-    paths:
-        - src/
-    scanDirectories:
-        - vendor/
-    bootstrapFiles:
-        - phpstan-bootstrap.php
+	# Foundational shared library — held to the stricter level 8.
+	level: 8
+	bootstrapFiles:
+		- phpstan-bootstrap.php
+	paths:
+		- src/

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<ruleset name="WP Plugin Kit Coding Standards">
+	<description>PHPCS ruleset for wp-plugin-kit — extends DrDocks shared standards.</description>
+
+	<!-- Scan the library source -->
+	<file>src/</file>
+
+	<!-- Use shared DrDocks standards (WordPress-Extra + WordPress-Docs) -->
+	<rule ref="DrDocks">
+		<!--
+			"Kit" is the established public class prefix of this shared library (Kit_Settings,
+			Kit_Updater, ...). Lengthening or namespacing it is a breaking change for every
+			consuming plugin and is tracked separately, not as part of standards onboarding.
+		-->
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.ShortPrefixPassed"/>
+	</rule>
+
+	<!-- Library settings -->
+	<config name="text_domain" value="wp-plugin-kit"/>
+	<config name="prefixes" value="Kit"/>
+</ruleset>

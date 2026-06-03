@@ -13,12 +13,37 @@
 	"require": {
 		"php": ">=8.0"
 	},
+	"require-dev": {
+		"drdocks/wp-coding-standards": "^1.0"
+	},
+	"repositories": [
+		{
+			"type": "composer",
+			"url": "https://drdocks.nl/satis"
+		}
+	],
 	"autoload": {
 		"classmap": [
 			"src/"
 		]
 	},
 	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true,
+			"phpstan/extension-installer": true
+		},
 		"sort-packages": true
-	}
+	},
+	"scripts": {
+		"phpcs": "phpcs",
+		"phpcbf": "phpcbf",
+		"phpstan": "phpstan analyze --memory-limit=512M",
+		"lint-unicode": "bash -c '! grep -rEn \"\\\\u[0-9a-fA-F]{4}\" --include=\"*.php\" --exclude-dir=vendor . || (echo \"ERROR: JS-style \\uXXXX unicode escapes found in PHP files — use literal UTF-8 characters instead.\" && exit 1)'",
+		"check": [
+			"@phpcs",
+			"@phpstan",
+			"@lint-unicode"
+		]
+	},
+	"minimum-stability": "stable"
 }

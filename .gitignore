@@ -2,3 +2,4 @@ vendor/
 composer.lock
 .phpstan-cache/
 .DS_Store
+phpcs.xml
