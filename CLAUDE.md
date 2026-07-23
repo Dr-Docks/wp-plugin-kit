@@ -47,8 +47,31 @@ $updater = new Kit_Updater( array(
 $updater->init();
 ```
 
-Hooks: `update_plugins_drdocks.nl`, `plugins_api`.
+Hooks: `update_plugins_drdocks.nl`, `plugins_api`, `admin_enqueue_scripts`.
 Cache: transient `kit_update_{slug}` (6 uur).
+
+#### Rich "View details" modal (sinds 1.1.0)
+Optioneel, volledig data-gedreven vanuit de update-manifest (JSON op drdocks.nl).
+Levert de manifest een `sections`-map (`description`, `installation`, `faq`,
+`screenshots`) dan bouwt `plugin_info()` de volledige tabbed modal; ontbreekt die,
+dan blijft de historische sobere modal (naam + changelog) — dus **backwards
+compatible** voor elke andere plugin.
+
+- WordPress her-filtert elke sectie met zijn strikte plugin-modal kses-allowlist
+  (géén inline styles, `<style>`, `<svg>` of `<table>`). Lever daarom **schone
+  semantische HTML** (div/span + class) — de styling komt uit `assets/plugin-info.css`,
+  die alleen in de plugin-information iframe voor déze plugin wordt ingeladen.
+- Merkkleuren komen uit de manifest-`brand`-map en worden als inline `:root`
+  custom properties geïnjecteerd (`build_brand_css()`), zodat deze library
+  merk-neutraal blijft. Onbekende keys → neutrale defaults in de CSS.
+- Extra optionele manifest-velden die de native sidebar/banner vullen:
+  `tags`, `banners`, `active_installs`, `contributors`, `donate_link`, `added`,
+  `requires`, `requires_php`, `tested`, `homepage`, `author`, `name`.
+- De changelog-tab komt altijd uit het `changelog`-markdownveld (CHANGELOG.md via
+  release.sh), nooit uit `sections`.
+
+De consumerende plugin levert `update-manifest.json` in zijn repo aan; `release.sh`
+(wp-coding-standards) merget die over de gegenereerde base-JSON bij een release.
 
 ### Kit_Settings
 Abstract settings base class. Concrete klassen definiëren `OPTION_KEY` en `DEFAULTS`.
