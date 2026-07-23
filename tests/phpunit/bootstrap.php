@@ -30,3 +30,13 @@ if ( ! function_exists( 'wp_kses_post' ) ) {
 		return $text;
 	}
 }
+if ( ! function_exists( 'esc_url_raw' ) ) {
+	function esc_url_raw( $url ) {
+		return $url;
+	}
+}
+if ( ! function_exists( 'sanitize_text_field' ) ) {
+	function sanitize_text_field( $text ) {
+		return is_string( $text ) ? trim( $text ) : $text;
+	}
+}

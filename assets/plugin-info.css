@@ -1,0 +1,564 @@
+/**
+ * Kit — "View details" (plugin-information) modal theme.
+ *
+ * Enqueued by Kit_Updater::enqueue_modal_assets() INSIDE the WordPress
+ * plugin-information iframe, and only for a plugin whose update manifest ships
+ * rich `sections`. WordPress owns the iframe chrome and re-filters every
+ * section through a strict kses allowlist (no inline styles, no <style>, no
+ * <svg>, no <table>), so this file restyles WP's native DOM in place and the
+ * section HTML stays clean and semantic.
+ *
+ * Iframe DOM (install_plugin_information):
+ *   #plugin-information-scrollable
+ *     #plugin-information-title      (banner + <h2> plugin name)
+ *     #plugin-information-tabs       ( <a>, active = a.current )
+ *     #plugin-information-content
+ *       .fyi                         (native sidebar: version/author/…)
+ *       #section-holder > .section   (#section-description, -installation, …)
+ *   #plugin-information-footer        (install button)
+ *
+ * Brand tokens (--sgpi-*) are injected inline from the manifest `brand` map by
+ * Kit_Updater::build_brand_css(); the defaults below keep this shared library
+ * brand-neutral when a plugin supplies no brand.
+ */
+
+:root {
+	--sgpi-primary: #2563eb;
+	--sgpi-primary-2: #3b82f6;
+	--sgpi-deep: #1e40af;
+	--sgpi-charcoal: #0f172a;
+	--sgpi-ink: #111827;
+	--sgpi-text: #374151;
+	--sgpi-muted: #6b7280;
+	--sgpi-rule: #e5e7eb;
+	--sgpi-link: #2563eb;
+	--sgpi-link-hover: #1e40af;
+	--sgpi-sidebar-bg: #f8fafc;
+	--sgpi-panel-bg: #f8fafc;
+	--sgpi-chip-bg: #ffffff;
+	--sgpi-chip-fg: #1e40af;
+	--sgpi-chip-bd: #c7d2fe;
+	--sgpi-notice-bg: #eff6ff;
+	--sgpi-notice-fg: #1e3a8a;
+	--sgpi-check: #16a34a;
+	--sgpi-banner: linear-gradient(115deg, #0f172a 0%, #1e40af 55%, #3b82f6 100%);
+
+	/* Icons, tinted at use-site via mask + background-color. */
+	--sgpi-icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+	--sgpi-icon-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E");
+	--sgpi-icon-warn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/%3E%3C/svg%3E");
+	--sgpi-icon-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.6'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Ccircle cx='8.5' cy='10.5' r='1.5'/%3E%3Cpath d='m21 17-5-5L5 21'/%3E%3C/svg%3E");
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+body {
+	margin: 0;
+	background: #fff;
+	font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+#plugin-information-scrollable {
+	background: #fff;
+	color: var(--sgpi-text);
+}
+
+/* ── Banner + title bar ─────────────────────────────────────────────────── */
+#plugin-information-title,
+#plugin-information-title.with-banner {
+	position: relative;
+	box-sizing: border-box;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 150px 28px 18px;
+	overflow: hidden;
+	background: var(--sgpi-banner) top / 100% 130px no-repeat, #fff;
+	border-bottom: 1px solid var(--sgpi-rule);
+	font-weight: 400;
+}
+
+/* Native banner-image layer is unused (banner comes from CSS); keep it hidden. */
+#plugin-information-title .vignette {
+	display: none;
+}
+
+/* White logo, sitting in the flame band. */
+#plugin-information-title::before {
+	content: "";
+	position: absolute;
+	left: 28px;
+	top: 34px;
+	width: 240px;
+	height: 62px;
+	background: var(--sgpi-logo, none) left center / contain no-repeat;
+}
+
+/* Faint watermark, right side of the band. */
+#plugin-information-title::after {
+	content: "";
+	position: absolute;
+	right: 6px;
+	top: -26px;
+	width: 220px;
+	height: 200px;
+	opacity: 0.15;
+	background: var(--sgpi-watermark, none) center / contain no-repeat;
+	pointer-events: none;
+}
+
+#plugin-information-title h2 {
+	margin: 0;
+	padding: 0;
+	font-size: 22px;
+	line-height: 1.25;
+	font-weight: 700;
+	color: var(--sgpi-ink);
+	text-shadow: none;
+}
+
+/* ── Tabs (pills) ───────────────────────────────────────────────────────── */
+#plugin-information-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	height: auto;
+	padding: 12px 24px;
+	background: #fff;
+	border-bottom: 1px solid var(--sgpi-rule);
+}
+
+#plugin-information-tabs a {
+	position: static;
+	margin: 0;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	color: var(--sgpi-muted);
+	font-size: 13.5px;
+	font-weight: 500;
+	line-height: 1.4;
+	padding: 9px 18px;
+	border-radius: 999px;
+	text-decoration: none;
+	transition: background 0.15s, color 0.15s;
+}
+
+#plugin-information-tabs a:hover,
+#plugin-information-tabs a:focus {
+	color: var(--sgpi-link);
+	background: color-mix(in srgb, var(--sgpi-primary) 8%, transparent);
+}
+
+#plugin-information-tabs a.current {
+	color: #fff;
+	font-weight: 700;
+	background: linear-gradient(90deg, var(--sgpi-primary), var(--sgpi-primary-2));
+	box-shadow: 0 8px 18px color-mix(in srgb, var(--sgpi-primary) 32%, transparent);
+}
+
+/* ── Body layout: main + sidebar ────────────────────────────────────────── */
+#plugin-information-content {
+	background: #fff;
+}
+
+#plugin-information-content .fyi {
+	float: right;
+	width: 278px;
+	margin: 24px 24px 24px 0;
+	padding: 0;
+	background: transparent;
+	border: none;
+}
+
+#plugin-information-content #section-holder {
+	margin-right: 322px;
+	padding: 24px 28px 28px;
+}
+
+/* Sidebar meta as a card. */
+#plugin-information-content .fyi ul {
+	list-style: none;
+	margin: 0 0 14px;
+	padding: 4px 16px;
+	background: #fff;
+	border: 1px solid var(--sgpi-rule);
+	border-radius: 12px;
+	box-shadow: 0 2px 10px rgba(20, 8, 0, 0.05);
+}
+
+#plugin-information-content .fyi li {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 0;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--sgpi-rule);
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--sgpi-ink);
+	text-align: right;
+}
+
+#plugin-information-content .fyi li:last-child {
+	border-bottom: none;
+}
+
+#plugin-information-content .fyi li strong {
+	font-weight: 400;
+	color: var(--sgpi-muted);
+	text-align: left;
+}
+
+#plugin-information-content .fyi h2,
+#plugin-information-content .fyi h3 {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--sgpi-muted);
+	margin: 0 0 10px;
+}
+
+#plugin-information-content .fyi a {
+	color: var(--sgpi-link);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+#plugin-information-content .fyi a:hover {
+	color: var(--sgpi-link-hover);
+}
+
+/* Rating stars (if present) toned to brand. */
+#plugin-information-content .fyi .counter-container {
+	margin: 4px 0;
+}
+
+/* ── Section typography ─────────────────────────────────────────────────── */
+#plugin-information-scrollable .section {
+	font-size: 14px;
+	line-height: 1.62;
+	color: var(--sgpi-text);
+}
+
+#plugin-information-scrollable .section h3 {
+	margin: 0 0 8px;
+	font-size: 19px;
+	font-weight: 700;
+	color: var(--sgpi-ink);
+}
+
+#plugin-information-scrollable .section h4 {
+	margin: 24px 0 12px;
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--sgpi-ink);
+}
+
+#plugin-information-scrollable .section p {
+	margin: 0 0 14px;
+}
+
+#plugin-information-scrollable .section code {
+	background: rgba(0, 0, 0, 0.05);
+	padding: 1px 5px;
+	border-radius: 3px;
+	font-size: 12.5px;
+}
+
+#plugin-information-scrollable .section a {
+	color: var(--sgpi-link);
+}
+
+/* ── Notice (Heads up …) ────────────────────────────────────────────────── */
+.sg-pi-notice {
+	position: relative;
+	margin: 0 0 22px;
+	padding: 13px 16px 13px 44px;
+	background: var(--sgpi-notice-bg);
+	border-left: 4px solid var(--sgpi-primary);
+	border-radius: 0 4px 4px 0;
+	color: var(--sgpi-notice-fg);
+	font-size: 13.5px;
+}
+
+.sg-pi-notice::before {
+	content: "";
+	position: absolute;
+	left: 15px;
+	top: 14px;
+	width: 18px;
+	height: 18px;
+	background: var(--sgpi-primary);
+	-webkit-mask: var(--sgpi-icon-warn) center / contain no-repeat;
+	mask: var(--sgpi-icon-warn) center / contain no-repeat;
+}
+
+/* ── Chips (tags row + sidebar) ─────────────────────────────────────────── */
+.sg-pi-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0 0 22px;
+}
+
+.sg-pi-chip {
+	display: inline-block;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background: var(--sgpi-chip-bg);
+	color: var(--sgpi-chip-fg);
+	border: 1px solid var(--sgpi-chip-bd);
+}
+
+/* ── Feature bullets ────────────────────────────────────────────────────── */
+.sg-pi-features {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.sg-pi-feat {
+	position: relative;
+	padding-left: 27px;
+}
+
+.sg-pi-feat::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 3px;
+	width: 16px;
+	height: 16px;
+	background: var(--sgpi-link);
+	-webkit-mask: var(--sgpi-icon-check) center / contain no-repeat;
+	mask: var(--sgpi-icon-check) center / contain no-repeat;
+}
+
+.sg-pi-feat strong {
+	color: var(--sgpi-ink);
+}
+
+.sg-pi-muted {
+	color: var(--sgpi-muted);
+	font-size: 12.5px;
+}
+
+/* ── Builder-element cards ──────────────────────────────────────────────── */
+.sg-pi-eltcards {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.sg-pi-eltcard {
+	padding: 13px 15px;
+	border: 1px solid var(--sgpi-rule);
+	border-radius: 8px;
+	background: var(--sgpi-panel-bg);
+}
+
+.sg-pi-eltcard-t {
+	font-weight: 700;
+	font-size: 13.5px;
+	color: var(--sgpi-ink);
+}
+
+.sg-pi-eltcard-d {
+	margin-top: 2px;
+	font-size: 13px;
+	color: var(--sgpi-text);
+}
+
+/* ── Field-mapping matrix (div/span, no <table>) ────────────────────────── */
+.sg-pi-table {
+	border: 1px solid var(--sgpi-rule);
+	border-radius: 8px;
+	padding: 2px 16px 14px;
+}
+
+.sg-pi-ghead {
+	margin: 12px 0 2px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--sgpi-link);
+}
+
+.sg-pi-row {
+	display: flex;
+	gap: 14px;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--sgpi-rule);
+	font-size: 13px;
+}
+
+.sg-pi-row:last-child {
+	border-bottom: none;
+}
+
+.sg-pi-k {
+	flex: none;
+	width: 150px;
+	font-weight: 600;
+	color: var(--sgpi-ink);
+}
+
+.sg-pi-v {
+	flex: 1;
+	color: var(--sgpi-text);
+}
+
+.sg-pi-v.sg-pi-none {
+	color: var(--sgpi-muted);
+}
+
+/* ── Installation steps ─────────────────────────────────────────────────── */
+.sg-pi-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.sg-pi-step {
+	display: flex;
+	gap: 13px;
+}
+
+.sg-pi-num {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--sgpi-primary);
+	color: #fff;
+	font-size: 12.5px;
+	font-weight: 700;
+	line-height: 24px;
+	text-align: center;
+}
+
+.sg-pi-reqbox {
+	margin-top: 22px;
+	padding: 16px 18px;
+	background: var(--sgpi-panel-bg);
+	border: 1px solid var(--sgpi-rule);
+	border-radius: 8px;
+}
+
+.sg-pi-reqbox-t {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--sgpi-ink);
+	margin-bottom: 8px;
+}
+
+/* ── FAQ ────────────────────────────────────────────────────────────────── */
+.sg-pi-faq {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.sg-pi-q {
+	font-weight: 700;
+	color: var(--sgpi-ink);
+	margin-bottom: 4px;
+}
+
+/* ── Screenshots ────────────────────────────────────────────────────────── */
+.sg-pi-shotgrid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+.sg-pi-shotframe {
+	aspect-ratio: 16 / 10;
+	border: 1px dashed var(--sgpi-rule);
+	border-radius: 8px;
+	background: var(--sgpi-panel-bg);
+	position: relative;
+}
+
+.sg-pi-shotframe::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	width: 30px;
+	height: 30px;
+	background: var(--sgpi-muted);
+	-webkit-mask: var(--sgpi-icon-image) center / contain no-repeat;
+	mask: var(--sgpi-icon-image) center / contain no-repeat;
+}
+
+.sg-pi-shotframe img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 8px;
+}
+
+.sg-pi-shotcap {
+	margin-top: 7px;
+	font-size: 12.5px;
+	color: var(--sgpi-muted);
+}
+
+/* ── Changelog (from CHANGELOG.md markdown) ─────────────────────────────── */
+#section-changelog h3 {
+	font-size: 16px;
+	font-weight: 800;
+	color: var(--sgpi-ink);
+	border-left: 4px solid var(--sgpi-primary);
+	padding-left: 10px;
+	margin: 22px 0 8px;
+}
+
+#section-changelog h3:first-child {
+	margin-top: 0;
+}
+
+#section-changelog ul {
+	margin: 0 0 8px;
+	padding-left: 18px;
+}
+
+/* ── Footer button ──────────────────────────────────────────────────────── */
+#plugin-information-footer {
+	border-top: 1px solid var(--sgpi-rule);
+	background: #fff;
+}
+
+#plugin-information-footer .button,
+#plugin-information-footer .button-primary {
+	border: none;
+	border-radius: 6px;
+	background: linear-gradient(90deg, var(--sgpi-primary), var(--sgpi-primary-2));
+	color: #fff;
+	font-weight: 600;
+	text-shadow: none;
+	box-shadow: 0 6px 14px color-mix(in srgb, var(--sgpi-primary) 28%, transparent);
+}
+
+/* ── Narrow iframe fallback (classic thickbox ≈ 772px, or smaller) ──────── */
+@media (max-width: 680px) {
+	#plugin-information-content .fyi {
+		float: none;
+		width: auto;
+		margin: 20px 24px 0;
+	}
+
+	#plugin-information-content #section-holder {
+		margin-right: 0;
+	}
+
+	.sg-pi-shotgrid {
+		grid-template-columns: 1fr;
+	}
+}

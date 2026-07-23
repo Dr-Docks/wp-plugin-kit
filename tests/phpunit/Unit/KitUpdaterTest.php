@@ -137,4 +137,62 @@ final class KitUpdaterTest extends TestCase {
 		$this->assertStringContainsString( '<li>', $info->sections['changelog'] );
 		$this->assertStringNotContainsString( '## 1.2.0', $info->sections['changelog'] );
 	}
+
+	public function test_plugin_info_stays_sparse_without_rich_sections(): void {
+		// A minimal manifest (no `sections`, `banners`, `tags`) must keep the
+		// historical two-tab modal so every other plugin is unaffected.
+		$info = $this->make( $this->remote() )
+			->plugin_info( false, 'plugin_information', (object) array( 'slug' => 'my-plugin' ) );
+
+		$this->assertSame( array( 'description', 'changelog' ), array_keys( $info->sections ) );
+		$this->assertObjectNotHasProperty( 'banners', $info );
+		$this->assertObjectNotHasProperty( 'tags', $info );
+		$this->assertObjectNotHasProperty( 'active_installs', $info );
+	}
+
+	public function test_plugin_info_maps_rich_manifest(): void {
+		$info = $this->make(
+			$this->remote(
+				array(
+					'active_installs' => 400,
+					'tags'            => array( 'acf', 'impreza' ),
+					'banners'         => array( 'high' => 'https://example.com/banner.png' ),
+					'sections'        => array(
+						'description'  => '<div class="sg-pi-notice">Heads up</div><p>Intro</p>',
+						'installation' => '<div class="sg-pi-steps"><div class="sg-pi-step"></div></div>',
+						'faq'          => '<div class="sg-pi-faq"><div class="sg-pi-q">Q?</div></div>',
+						'screenshots'  => '<div class="sg-pi-shotgrid"></div>',
+					),
+					'changelog'       => "## 1.2.0\n- Item",
+				)
+			)
+		)->plugin_info( false, 'plugin_information', (object) array( 'slug' => 'my-plugin' ) );
+
+		// Tabs appear in the fixed, WordPress-conventional order.
+		$this->assertSame(
+			array( 'description', 'installation', 'faq', 'screenshots', 'changelog' ),
+			array_keys( $info->sections )
+		);
+		$this->assertStringContainsString( 'sg-pi-notice', $info->sections['description'] );
+		$this->assertStringContainsString( '<h3>', $info->sections['changelog'], 'Changelog still comes from CHANGELOG markdown, not the manifest sections.' );
+		$this->assertSame( 400, $info->active_installs );
+		$this->assertSame( array( 'acf', 'impreza' ), $info->tags );
+		$this->assertSame( 'https://example.com/banner.png', $info->banners['high'] );
+	}
+
+	public function test_plugin_info_skips_empty_manifest_sections(): void {
+		// Missing/empty section keys are dropped, never rendered as blank tabs.
+		$info = $this->make(
+			$this->remote(
+				array(
+					'sections' => array(
+						'description'  => '<p>Only this one</p>',
+						'installation' => '',
+					),
+				)
+			)
+		)->plugin_info( false, 'plugin_information', (object) array( 'slug' => 'my-plugin' ) );
+
+		$this->assertSame( array( 'description', 'changelog' ), array_keys( $info->sections ) );
+	}
 }
