@@ -3,3 +3,5 @@ composer.lock
 .phpstan-cache/
 .DS_Store
 phpcs.xml
+.phpunit.cache
+.phpunit.result.cache
