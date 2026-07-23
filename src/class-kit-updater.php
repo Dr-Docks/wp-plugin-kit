@@ -130,15 +130,18 @@ class Kit_Updater {
 			return $update;
 		}
 
-		if ( version_compare( $this->version, $remote['version'], '>=' ) ) {
-			return $update;
-		}
-
+		// Always return the payload so WordPress places the plugin in either
+		// `response` (update available) or `no_update` (up to date). The latter
+		// is what keeps the "View details" / changelog modal available at the
+		// current version. WordPress compares `new_version` against the installed
+		// version itself in wp_update_plugins(), so we must not gate here.
 		return array(
-			'slug'    => $this->slug,
-			'version' => $remote['version'],
-			'url'     => $remote['url'] ?? 'https://drdocks.nl',
-			'package' => $remote['download_url'],
+			'id'          => $this->plugin_file,
+			'slug'        => $this->slug,
+			'plugin'      => $this->plugin_file,
+			'new_version' => $remote['version'],
+			'url'         => $remote['url'] ?? 'https://drdocks.nl',
+			'package'     => $remote['download_url'],
 		);
 	}
 
