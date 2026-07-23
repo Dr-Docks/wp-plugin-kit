@@ -105,7 +105,6 @@ class Kit_Updater {
 	public function init(): void {
 		add_filter( 'update_plugins_drdocks.nl', array( $this, 'check_update' ), 10, 4 );
 		add_filter( 'plugins_api', array( $this, 'plugin_info' ), 20, 3 );
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_modal_assets' ) );
 	}
 
 	/**
@@ -219,13 +218,11 @@ class Kit_Updater {
 	 * Build the "View details" section tabs from the update manifest.
 	 *
 	 * A manifest may ship a `sections` map (description, installation, faq,
-	 * screenshots) of clean, semantic HTML. WordPress re-filters each section
-	 * with its own strict plugin-modal allowlist when rendering the iframe
-	 * (dropping inline styles, `<style>`, `<svg>` and `<table>`), so the
-	 * markup ships style-free and is themed by the enqueued stylesheet
-	 * (see enqueue_modal_assets()). When no `sections` are supplied the
-	 * historical sparse output (name + changelog) is returned verbatim, which
-	 * keeps every other plugin's modal unchanged.
+	 * screenshots) of clean, semantic HTML, which WordPress renders natively in
+	 * its own modal chrome (no custom styling is injected; the markup is the
+	 * standard readme-style HTML the plugin-information modal expects). When no
+	 * `sections` are supplied the historical sparse output (name + changelog) is
+	 * returned verbatim, which keeps every other plugin's modal unchanged.
 	 *
 	 * @since 1.1.0
 	 *
@@ -258,134 +255,6 @@ class Kit_Updater {
 		$sections['changelog'] = $changelog;
 
 		return $sections;
-	}
-
-	/**
-	 * Enqueue the branded stylesheet inside the "View details" iframe.
-	 *
-	 * Only runs on the plugin-information iframe for this exact plugin, and
-	 * only when the manifest opts in with rich `sections`. WordPress owns the
-	 * iframe chrome (banner, tabs, .fyi sidebar); this restyles it in place to
-	 * match the design. Brand tokens come from the manifest `brand` map and are
-	 * injected as inline custom properties, keeping this shared library
-	 * brand-neutral.
-	 *
-	 * @since 1.1.0
-	 *
-	 * @param string $hook Current admin page hook suffix.
-	 */
-	public function enqueue_modal_assets( string $hook ): void {
-		if ( 'plugin-install.php' !== $hook ) {
-			return;
-		}
-
-		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only display gate; no state is changed.
-		$tab    = isset( $_REQUEST['tab'] ) ? sanitize_key( wp_unslash( $_REQUEST['tab'] ) ) : '';
-		$plugin = isset( $_REQUEST['plugin'] ) ? sanitize_key( wp_unslash( $_REQUEST['plugin'] ) ) : '';
-		// phpcs:enable WordPress.Security.NonceVerification.Recommended
-
-		if ( 'plugin-information' !== $tab || $this->slug !== $plugin ) {
-			return;
-		}
-
-		$remote = $this->get_remote_data();
-		if ( ! $remote || empty( $remote['sections'] ) ) {
-			return;
-		}
-
-		$handle  = 'kit-plugin-info';
-		$css_url = plugins_url( 'assets/plugin-info.css', dirname( __DIR__ ) . '/wp-plugin-kit.php' );
-
-		wp_enqueue_style( $handle, $css_url, array(), $this->version );
-
-		$brand = ( ! empty( $remote['brand'] ) && is_array( $remote['brand'] ) ) ? $remote['brand'] : array();
-		$vars  = $this->build_brand_css( $brand );
-		if ( '' !== $vars ) {
-			wp_add_inline_style( $handle, $vars );
-		}
-	}
-
-	/**
-	 * Turn the manifest `brand` map into a scoped custom-property block.
-	 *
-	 * Values are hardened against declaration break-out; URLs run through
-	 * esc_url_raw(). Unknown keys are ignored. Absent keys fall back to the
-	 * neutral defaults baked into plugin-info.css.
-	 *
-	 * @since 1.1.0
-	 *
-	 * @param array<string, mixed> $brand Manifest brand map.
-	 * @return string CSS `:root{ --var:value; ... }` block, or '' when empty.
-	 */
-	private function build_brand_css( array $brand ): string {
-		$map = array(
-			'primary'    => '--sgpi-primary',
-			'primary-2'  => '--sgpi-primary-2',
-			'deep'       => '--sgpi-deep',
-			'charcoal'   => '--sgpi-charcoal',
-			'ink'        => '--sgpi-ink',
-			'text'       => '--sgpi-text',
-			'muted'      => '--sgpi-muted',
-			'rule'       => '--sgpi-rule',
-			'link'       => '--sgpi-link',
-			'link-hover' => '--sgpi-link-hover',
-			'sidebar-bg' => '--sgpi-sidebar-bg',
-			'panel-bg'   => '--sgpi-panel-bg',
-			'chip-bg'    => '--sgpi-chip-bg',
-			'chip-fg'    => '--sgpi-chip-fg',
-			'chip-bd'    => '--sgpi-chip-bd',
-			'notice-bg'  => '--sgpi-notice-bg',
-			'notice-fg'  => '--sgpi-notice-fg',
-			'check'      => '--sgpi-check',
-			'banner'     => '--sgpi-banner',
-		);
-
-		$decls = array();
-		foreach ( $map as $key => $var ) {
-			if ( empty( $brand[ $key ] ) ) {
-				continue;
-			}
-			$value = $this->sanitize_css_value( (string) $brand[ $key ] );
-			if ( '' !== $value ) {
-				$decls[] = $var . ':' . $value;
-			}
-		}
-
-		foreach ( array(
-			'logo'      => '--sgpi-logo',
-			'watermark' => '--sgpi-watermark',
-		) as $key => $var ) {
-			if ( empty( $brand[ $key ] ) ) {
-				continue;
-			}
-			$url = esc_url_raw( (string) $brand[ $key ] );
-			if ( '' !== $url ) {
-				$decls[] = $var . ":url('" . $url . "')";
-			}
-		}
-
-		if ( empty( $decls ) ) {
-			return '';
-		}
-
-		return ':root{' . implode( ';', $decls ) . '}';
-	}
-
-	/**
-	 * Strip anything that could break out of a single CSS declaration.
-	 *
-	 * Permits gradients, colours and keyword values (which need no braces or
-	 * semicolons); removes `url()` since image tokens are handled separately.
-	 *
-	 * @since 1.1.0
-	 *
-	 * @param string $value Raw brand value.
-	 * @return string Safe CSS value.
-	 */
-	private function sanitize_css_value( string $value ): string {
-		$value = str_replace( array( '{', '}', ';', '<', '>', '"', "'", '@' ), '', $value );
-		$value = (string) preg_replace( '/url\s*\(/i', '', $value );
-		return trim( $value );
 	}
 
 	/**
