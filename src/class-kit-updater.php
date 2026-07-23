@@ -174,8 +174,8 @@ class Kit_Updater {
 		$info->name          = $this->plugin_name;
 		$info->slug          = $this->slug;
 		$info->version       = $remote['version'];
-		$info->author        = '<a href="https://drdocks.nl">Dr.Docks</a>';
-		$info->homepage      = 'https://drdocks.nl';
+		$info->author        = $remote['author'] ?? '<a href="https://drdocks.nl">Dr.Docks</a>';
+		$info->homepage      = $remote['homepage'] ?? 'https://drdocks.nl';
 		$info->requires      = $remote['requires'] ?? '6.5';
 		$info->tested        = $remote['tested'] ?? '';
 		$info->requires_php  = $remote['requires_php'] ?? '8.0';
