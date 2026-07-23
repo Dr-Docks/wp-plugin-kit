@@ -205,7 +205,7 @@ class Kit_Updater {
 	 * @since 1.0.0
 	 * @return array<string, mixed>|null Remote data or null on failure.
 	 */
-	private function get_remote_data(): ?array {
+	protected function get_remote_data(): ?array {
 		$transient_key = 'kit_update_' . $this->slug;
 		$cached        = get_transient( $transient_key );
 

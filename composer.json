@@ -14,7 +14,8 @@
 		"php": ">=8.0"
 	},
 	"require-dev": {
-		"drdocks/wp-coding-standards": "^1.0"
+		"drdocks/wp-coding-standards": "^1.0",
+		"phpunit/phpunit": "^9.6"
 	},
 	"repositories": [
 		{
@@ -39,10 +40,12 @@
 		"phpcbf": "phpcbf",
 		"phpstan": "phpstan analyze --memory-limit=512M",
 		"lint-unicode": "bash -c '! grep -rEn \"\\\\u[0-9a-fA-F]{4}\" --include=\"*.php\" --exclude-dir=vendor . || (echo \"ERROR: JS-style \\uXXXX unicode escapes found in PHP files — use literal UTF-8 characters instead.\" && exit 1)'",
+		"test": "phpunit",
 		"check": [
 			"@phpcs",
 			"@phpstan",
-			"@lint-unicode"
+			"@lint-unicode",
+			"@test"
 		]
 	},
 	"minimum-stability": "stable"
