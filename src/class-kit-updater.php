@@ -170,15 +170,20 @@ class Kit_Updater {
 			return is_object( $result ) ? $result : false;
 		}
 
+		// When the manifest ships the raw readme.txt (handbook format), it is the
+		// single source of truth for the modal: headers, sections, screenshots and
+		// changelog are parsed from it here, exactly like wordpress.org does.
+		$readme = ! empty( $remote['readme'] ) ? $this->parse_readme( (string) $remote['readme'] ) : array();
+
 		$info                = new \stdClass();
-		$info->name          = ! empty( $remote['name'] ) ? (string) $remote['name'] : $this->plugin_name;
+		$info->name          = ! empty( $readme['name'] ) ? $readme['name'] : ( ! empty( $remote['name'] ) ? (string) $remote['name'] : $this->plugin_name );
 		$info->slug          = $this->slug;
 		$info->version       = $remote['version'];
 		$info->author        = $remote['author'] ?? '<a href="https://drdocks.nl">Dr.Docks</a>';
 		$info->homepage      = $remote['homepage'] ?? 'https://drdocks.nl';
-		$info->requires      = $remote['requires'] ?? '6.5';
-		$info->tested        = $remote['tested'] ?? '';
-		$info->requires_php  = $remote['requires_php'] ?? '8.0';
+		$info->requires      = ! empty( $readme['requires'] ) ? $readme['requires'] : ( $remote['requires'] ?? '6.5' );
+		$info->tested        = ! empty( $readme['tested'] ) ? $readme['tested'] : ( $remote['tested'] ?? '' );
+		$info->requires_php  = ! empty( $readme['requires_php'] ) ? $readme['requires_php'] : ( $remote['requires_php'] ?? '8.0' );
 		$info->download_link = $remote['download_url'];
 		$info->trunk         = $remote['download_url'];
 		$info->last_updated  = $remote['last_updated'] ?? '';
@@ -196,8 +201,9 @@ class Kit_Updater {
 		if ( isset( $remote['active_installs'] ) && is_numeric( $remote['active_installs'] ) ) {
 			$info->active_installs = (int) $remote['active_installs'];
 		}
-		if ( ! empty( $remote['tags'] ) && is_array( $remote['tags'] ) ) {
-			$info->tags = array_map( 'sanitize_text_field', $remote['tags'] );
+		$tags = ! empty( $readme['tags'] ) ? $readme['tags'] : ( ( ! empty( $remote['tags'] ) && is_array( $remote['tags'] ) ) ? $remote['tags'] : array() );
+		if ( ! empty( $tags ) ) {
+			$info->tags = array_map( 'sanitize_text_field', $tags );
 		}
 		if ( ! empty( $remote['contributors'] ) && is_array( $remote['contributors'] ) ) {
 			$info->contributors = $remote['contributors'];
@@ -209,7 +215,7 @@ class Kit_Updater {
 			$info->icons = array_map( 'esc_url_raw', $remote['icons'] );
 		}
 
-		$info->sections = $this->build_sections( $remote );
+		$info->sections = $this->build_sections( $remote, $readme );
 
 		return $info;
 	}
@@ -227,34 +233,230 @@ class Kit_Updater {
 	 * @since 1.1.0
 	 *
 	 * @param array<string, mixed> $remote Decoded manifest.
+	 * @param array<string, mixed> $readme Parsed readme.txt (may be empty).
 	 * @return array<string, string> Section slug => HTML, in tab order.
 	 */
-	private function build_sections( array $remote ): array {
-		$changelog = ! empty( $remote['changelog'] )
-			? wp_kses_post( $this->parse_markdown( (string) $remote['changelog'] ) )
+	private function build_sections( array $remote, array $readme = array() ): array {
+		// Changelog: the readme's Changelog section wins; otherwise the manifest's
+		// `changelog` markdown field (e.g. generated from CHANGELOG.md).
+		$changelog_md = '';
+		if ( ! empty( $readme['changelog'] ) ) {
+			$changelog_md = (string) $readme['changelog'];
+		} elseif ( ! empty( $remote['changelog'] ) ) {
+			$changelog_md = (string) $remote['changelog'];
+		}
+		$changelog = '' !== $changelog_md
+			? wp_kses_post( $this->parse_markdown( $changelog_md ) )
 			: '<p>See the plugin changelog for release notes.</p>';
 
-		// No rich sections → historical sparse fallback (unchanged behaviour).
-		if ( empty( $remote['sections'] ) || ! is_array( $remote['sections'] ) ) {
-			$name = ! empty( $remote['name'] ) ? (string) $remote['name'] : $this->plugin_name;
+		// Prefer readme-parsed sections; then manifest sections; then sparse.
+		$src = array();
+		if ( ! empty( $readme['sections'] ) && is_array( $readme['sections'] ) ) {
+			$src = $readme['sections'];
+		} elseif ( ! empty( $remote['sections'] ) && is_array( $remote['sections'] ) ) {
+			$src = $remote['sections'];
+		}
+
+		if ( empty( $src ) ) {
+			$name = ! empty( $readme['name'] ) ? (string) $readme['name'] : ( ! empty( $remote['name'] ) ? (string) $remote['name'] : $this->plugin_name );
 			return array(
 				'description' => sprintf( '<p>%s</p>', esc_html( $name ) ),
 				'changelog'   => $changelog,
 			);
 		}
 
-		// Manifest-driven sections, in a fixed, WordPress-conventional tab order.
-		// The changelog is always sourced from the version-controlled CHANGELOG
-		// (via the `changelog` markdown field), never from the sections map.
+		// Fixed, WordPress-conventional tab order. Changelog is always appended
+		// last from the version-controlled source, never from the sections map.
 		$sections = array();
 		foreach ( array( 'description', 'installation', 'faq', 'screenshots' ) as $key ) {
-			if ( ! empty( $remote['sections'][ $key ] ) ) {
-				$sections[ $key ] = wp_kses_post( (string) $remote['sections'][ $key ] );
+			if ( ! empty( $src[ $key ] ) ) {
+				$sections[ $key ] = wp_kses_post( (string) $src[ $key ] );
 			}
 		}
 		$sections['changelog'] = $changelog;
 
 		return $sections;
+	}
+
+	/**
+	 * Parse a WordPress-format readme.txt into the fields the modal needs.
+	 *
+	 * Mirrors what wordpress.org does server-side: header meta plus the
+	 * Description / Installation / FAQ / Screenshots / Changelog sections as
+	 * HTML. Screenshots become the native `<ol><li><img><p>` structure with
+	 * image URLs by convention ({update-base}/assets/{slug}/screenshot-N.png),
+	 * so WordPress' own `#section-screenshots li img { max-width: 100% }` styles
+	 * them. The changelog is returned as markdown for parse_markdown().
+	 *
+	 * @since 1.2.0
+	 *
+	 * @param string $readme Raw readme.txt contents.
+	 * @return array<string, mixed> Parsed name, requires, tested, requires_php, tags, sections, changelog.
+	 */
+	private function parse_readme( string $readme ): array {
+		$out = array(
+			'sections'  => array(),
+			'tags'      => array(),
+			'changelog' => '',
+		);
+
+		if ( preg_match( '/^===\s*(.+?)\s*===/m', $readme, $m ) ) {
+			$out['name'] = trim( $m[1] );
+		}
+
+		$header = '';
+		if ( preg_match( '/===.*?===\s*(.*?)(?=^==[^=])/ms', $readme, $hm ) ) {
+			$header = $hm[1];
+		}
+		$labels = array(
+			'requires'     => 'Requires at least',
+			'tested'       => 'Tested up to',
+			'requires_php' => 'Requires PHP',
+		);
+		foreach ( $labels as $key => $label ) {
+			if ( preg_match( '/^' . preg_quote( $label, '/' ) . '\s*:\s*(.+)$/m', $header, $mm ) ) {
+				$out[ $key ] = trim( $mm[1] );
+			}
+		}
+		if ( preg_match( '/^Tags\s*:\s*(.+)$/m', $header, $tm ) ) {
+			$out['tags'] = array_values( array_filter( array_map( 'trim', explode( ',', $tm[1] ) ) ) );
+		}
+
+		$map = array(
+			'description'                => 'description',
+			'installation'               => 'installation',
+			'frequently asked questions' => 'faq',
+			'screenshots'                => 'screenshots',
+			'changelog'                  => 'changelog',
+		);
+		if ( preg_match_all( '/^==\s*(.+?)\s*==\s*\n(.*?)(?=^==\s|\z)/ms', $readme, $sm, PREG_SET_ORDER ) ) {
+			foreach ( $sm as $s ) {
+				$key = $map[ strtolower( trim( $s[1] ) ) ] ?? '';
+				if ( '' === $key ) {
+					continue;
+				}
+				$body = trim( $s[2] );
+				if ( 'changelog' === $key ) {
+					$md               = (string) preg_replace( '/^=\s+(.*?)\s+=$/m', '## $1', $body );
+					$out['changelog'] = (string) preg_replace( '/^\*\s+/m', '- ', $md );
+				} elseif ( 'screenshots' === $key ) {
+					$out['sections']['screenshots'] = $this->build_screenshots( $this->readme_captions( $body ) );
+				} else {
+					$out['sections'][ $key ] = $this->readme_body_to_html( $body );
+				}
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Extract numbered screenshot captions from a readme Screenshots body.
+	 *
+	 * @since 1.2.0
+	 *
+	 * @param string $body Section body.
+	 * @return string[] Captions, in order.
+	 */
+	private function readme_captions( string $body ): array {
+		$caps = array();
+		foreach ( (array) preg_split( '/\r?\n/', $body ) as $line ) {
+			$line = trim( (string) $line );
+			if ( '' === $line ) {
+				continue;
+			}
+			$caps[] = (string) preg_replace( '/^\d+\.\s*/', '', $line );
+		}
+		return $caps;
+	}
+
+	/**
+	 * Build the native screenshots section (`<ol><li><img><p>`) from captions.
+	 *
+	 * @since 1.2.0
+	 *
+	 * @param string[] $captions Screenshot captions.
+	 * @return string HTML, or '' when there are none.
+	 */
+	private function build_screenshots( array $captions ): string {
+		if ( empty( $captions ) ) {
+			return '';
+		}
+		$base  = self::UPDATE_BASE_URL . 'assets/' . $this->slug;
+		$items = '';
+		foreach ( $captions as $idx => $cap ) {
+			$num    = (int) $idx + 1;
+			$src    = esc_url( $base . '/screenshot-' . $num . '.png' );
+			$items .= '<li><img src="' . $src . '" alt="' . esc_attr( $cap ) . '" /><p>' . esc_html( $cap ) . '</p></li>';
+		}
+		return '<ol>' . $items . '</ol>';
+	}
+
+	/**
+	 * Convert a readme section body to HTML (lists, sub-headings, paragraphs).
+	 *
+	 * @since 1.2.0
+	 *
+	 * @param string $body Section body.
+	 * @return string HTML.
+	 */
+	private function readme_body_to_html( string $body ): string {
+		$lines = (array) preg_split( '/\r?\n/', $body );
+		$count = count( $lines );
+		$out   = array();
+		$i     = 0;
+		while ( $i < $count ) {
+			$line = trim( (string) $lines[ $i ] );
+			if ( '' === $line ) {
+				++$i;
+				continue;
+			}
+			if ( preg_match( '/^=\s+(.*?)\s+=$/', $line, $m ) || preg_match( '/^\*\*(.+?)\*\*$/', $line, $m ) ) {
+				$out[] = '<h4>' . $this->readme_inline( $m[1] ) . '</h4>';
+				++$i;
+			} elseif ( preg_match( '/^\*\s+/', $line ) ) {
+				$items = '';
+				while ( $i < $count && preg_match( '/^\*\s+(.*)$/', trim( (string) $lines[ $i ] ), $lm ) ) {
+					$items .= '<li>' . $this->readme_inline( $lm[1] ) . '</li>';
+					++$i;
+				}
+				$out[] = '<ul>' . $items . '</ul>';
+			} elseif ( preg_match( '/^\d+\.\s+/', $line ) ) {
+				$items = '';
+				while ( $i < $count && preg_match( '/^\d+\.\s+(.*)$/', trim( (string) $lines[ $i ] ), $lm ) ) {
+					$items .= '<li>' . $this->readme_inline( $lm[1] ) . '</li>';
+					++$i;
+				}
+				$out[] = '<ol>' . $items . '</ol>';
+			} else {
+				$para = array();
+				while ( $i < $count ) {
+					$pt = trim( (string) $lines[ $i ] );
+					if ( '' === $pt || preg_match( '/^(\*\s|\d+\.\s|=\s|\*\*.+\*\*$)/', $pt ) ) {
+						break;
+					}
+					$para[] = $pt;
+					++$i;
+				}
+				$out[] = '<p>' . $this->readme_inline( implode( ' ', $para ) ) . '</p>';
+			}
+		}
+		return implode( '', $out );
+	}
+
+	/**
+	 * Inline readme markup: escape HTML, then `code` and **strong**.
+	 *
+	 * @since 1.2.0
+	 *
+	 * @param string $text Raw text.
+	 * @return string HTML.
+	 */
+	private function readme_inline( string $text ): string {
+		$text = str_replace( array( '&', '<', '>' ), array( '&amp;', '&lt;', '&gt;' ), $text );
+		$text = (string) preg_replace( '/`([^`]+)`/', '<code>$1</code>', $text );
+		$text = (string) preg_replace( '/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $text );
+		return $text;
 	}
 
 	/**

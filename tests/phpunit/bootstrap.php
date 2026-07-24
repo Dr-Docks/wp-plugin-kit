@@ -40,3 +40,13 @@ if ( ! function_exists( 'sanitize_text_field' ) ) {
 		return is_string( $text ) ? trim( $text ) : $text;
 	}
 }
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) {
+		return $url;
+	}
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+	function esc_attr( $text ) {
+		return $text;
+	}
+}
