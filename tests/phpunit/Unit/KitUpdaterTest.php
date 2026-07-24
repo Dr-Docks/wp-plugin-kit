@@ -180,6 +180,50 @@ final class KitUpdaterTest extends TestCase {
 		$this->assertSame( 'https://example.com/banner.png', $info->banners['high'] );
 	}
 
+	public function test_plugin_info_parses_readme(): void {
+		$readme = "=== My Plugin ===\n"
+			. "Contributors: me\n"
+			. "Tags: alpha, beta\n"
+			. "Requires at least: 6.1\n"
+			. "Tested up to: 7.0.2\n"
+			. "Requires PHP: 7.4\n"
+			. "Stable tag: 1.2.0\n\n"
+			. "Short description here.\n\n"
+			. "== Description ==\n\nIntro paragraph with **bold** and `code`.\n\n**Features**\n\n* First feature\n* Second feature\n\n"
+			. "== Installation ==\n\n1. Step one.\n2. Step two.\n\n"
+			. "== Frequently Asked Questions ==\n\n= A question? =\n\nAn answer.\n\n"
+			. "== Screenshots ==\n\n1. First shot.\n2. Second shot.\n\n"
+			. "== Changelog ==\n\n= 1.2.0 =\n* Did a thing.\n\n= 1.1.0 =\n* Older thing.\n";
+
+		$info = $this->make( $this->remote( array( 'readme' => $readme ) ) )
+			->plugin_info( false, 'plugin_information', (object) array( 'slug' => 'my-plugin' ) );
+
+		// Headers come from the readme.
+		$this->assertSame( 'My Plugin', $info->name );
+		$this->assertSame( '6.1', $info->requires );
+		$this->assertSame( '7.0.2', $info->tested );
+		$this->assertSame( '7.4', $info->requires_php );
+		$this->assertSame( array( 'alpha', 'beta' ), $info->tags );
+
+		// All five tabs, in order.
+		$this->assertSame(
+			array( 'description', 'installation', 'faq', 'screenshots', 'changelog' ),
+			array_keys( $info->sections )
+		);
+		// Body markup.
+		$this->assertStringContainsString( '<strong>bold</strong>', $info->sections['description'] );
+		$this->assertStringContainsString( '<code>code</code>', $info->sections['description'] );
+		$this->assertStringContainsString( '<ul><li>First feature</li>', $info->sections['description'] );
+		$this->assertStringContainsString( '<ol><li>Step one.</li>', $info->sections['installation'] );
+		$this->assertStringContainsString( '<h4>A question?</h4>', $info->sections['faq'] );
+		// Screenshots use the native ol/li/img structure with convention URLs.
+		$this->assertStringContainsString( '<ol><li><img src="', $info->sections['screenshots'] );
+		$this->assertStringContainsString( '/assets/my-plugin/screenshot-1.png', $info->sections['screenshots'] );
+		$this->assertSame( 2, substr_count( $info->sections['screenshots'], '<li>' ) );
+		// Changelog rendered from readme (two versions).
+		$this->assertSame( 2, substr_count( $info->sections['changelog'], '<h3>' ) );
+	}
+
 	public function test_plugin_info_skips_empty_manifest_sections(): void {
 		// Missing/empty section keys are dropped, never rendered as blank tabs.
 		$info = $this->make(

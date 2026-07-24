@@ -53,18 +53,27 @@ Cache: transient `kit_update_{slug}` (6 uur).
 #### "View details" modal (volledig WordPress-native, handboek-conform)
 `plugin_info()` levert het standaard `plugins_api` object; WordPress rendert de
 modal met zijn **eigen** chrome (banner, tabs, `.fyi` sidebar). **Geen eigen CSS
-of JS** — de branding zit in de handboek-assets (banner 772x250 + 1544x500, icon
-256/svg) via `banners`/`icons`. Content is standaard readme-stijl HTML in
-`sections` (`description`, `installation`, `faq`, `screenshots`); changelog komt
-uit het `changelog`-markdownveld. Ontbreekt `sections`, dan de historische sobere
-modal (naam + changelog) — **backwards compatible**.
+of JS.** De branding zit in de handboek-assets (banner 772x250 + 1544x500, icon
+256/svg) via `banners`/`icons`.
 
-Optionele manifest-velden die de native modal vullen: `banners`, `icons`, `tags`,
-`active_installs`, `contributors`, `donate_link`, `added`, `requires`,
-`requires_php`, `tested`, `homepage`, `author`, `name`, `sections`.
+**readme.txt is de enige bron (sinds 1.2.0).** Levert de update-JSON het veld
+`readme` (de ruwe readme.txt-inhoud), dan parseert `parse_readme()` daaruit: de
+headers (`requires`/`tested`/`requires_php`/`tags`/`name`), de secties
+(`description`/`installation`/`faq`), de **screenshots** als native
+`<ol><li><img><p>`-structuur met URLs via conventie
+(`{update-base}/assets/{slug}/screenshot-N.png`, zodat WP's eigen
+`#section-screenshots li img { max-width:100% }` grijpt), en de **changelog** (uit
+de readme-Changelog-sectie, gerenderd via `parse_markdown()`). Precies zoals
+wordpress.org readme's server-side parseert. Zo reproduceert elke release de hele
+modal; geen handwerk dat een release overschrijft.
 
-De consumerende plugin levert de canonieke inhoud in `readme.txt` (handboek-formaat);
-de release-stap zet dat samen met de assets in de update-JSON.
+Volgorde-voorrang: readme > `sections`-map in de JSON > sobere fallback (naam +
+changelog). Alles blijft **backwards compatible**. `release.sh` embed de ruwe
+readme.txt in de JSON (`jq --rawfile`); assets (banner/icon/screenshots) staan op
+drdocks.nl onder `assets/{slug}/`.
+
+Overige optionele JSON-velden: `banners`, `icons`, `active_installs`,
+`contributors`, `donate_link`, `added`, `homepage`, `author`.
 
 ### Kit_Settings
 Abstract settings base class. Concrete klassen definiëren `OPTION_KEY` en `DEFAULTS`.
